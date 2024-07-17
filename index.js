@@ -17,6 +17,21 @@ app.use(
 );
 app.use(express.json());
 
+//auth middleware
+const authMiddleware = (req, res, next) => {
+  const token = req.header("Authorization")?.split(" ")[1];
+  if(!token){
+    return res.status(401).send('Access denied. No token provided.');
+  }
+  try {
+    const decoded = jwt.verify(token, 'IloveYou')
+    req.userId = decoded.userId;
+    next()
+  } catch (error) {
+    res.status(400).send(error)
+  }
+};
+
 const uri =
   "mongodb+srv://teka_de:Srmxt2Cw0L0a78lj@cluster0.x7zkge4.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -75,9 +90,13 @@ async function run() {
           .status(400)
           .send({ message: "Your account has been blocked by admin." });
       }
-      const token = jwt.sign({ id: user._id, role: user.role }, "IloveYou", {
-        expiresIn: "365d",
-      });
+      const token = jwt.sign(
+        { userId: user._id, role: user.role },
+        "IloveYou",
+        {
+          expiresIn: "365d",
+        }
+      );
       res.send({ token, user });
     });
 
@@ -99,7 +118,7 @@ async function run() {
       if (status === "active") {
         const result = await userCollection.updateOne(
           { _id: new ObjectId(id) },
-          { $set: { status: "active" } }
+          { $set: { status: "active", balance: 40 } }
         );
         res.send(result);
       } else if (status === "block") {
@@ -116,16 +135,27 @@ async function run() {
     app.put("/update-role", async (req, res) => {
       const data = req.body;
       const { role, id } = data;
-
+      if (role === "agent") {
+        await userCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { balance: 10000 } }
+        );
+      }
       const result = await userCollection.updateOne(
         { _id: new ObjectId(id) },
-        { $set: { role: role } }
+        { $set: { role: role, status: "active" } }
       );
       res.send(result);
     });
 
-    app.get("/user", (req, res) => {
-      res.json(req.user);
+    //get user data---
+    app.get("/user", authMiddleware, async (req, res) => {
+      const user = await userCollection.findOne(
+        { _id: new ObjectId(req.userId) },
+        { projection: { pin: 0 } }
+      );
+      if(!user) return res.status(404).send('user not found')
+      res.send(user)
     });
 
     app.get("/", (req, res) => {
