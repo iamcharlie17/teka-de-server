@@ -37,6 +37,7 @@ async function run() {
       const isExist = await userCollection.findOne({
         $or: [{ email: user.email }, { phoneNumber: user.phoneNumber }],
       });
+      
       if (isExist) {
         return res
           .status(400)
@@ -44,6 +45,8 @@ async function run() {
             message: "User already exist with this email or phone number.",
           });
       }
+ 
+
       const hashedPin = await bcrypt.hash(user.pin, 10);
       user.pin = hashedPin;
 
@@ -59,16 +62,34 @@ async function run() {
       if (!user) {
         return res.status(400).send({ message: "Invalid credentials" });
       }
-
+      
       const isMatch = await bcrypt.compare(pin, user.pin);
       if (!isMatch) {
         return res.status(400).send({ message: "Invalid credentials" });
+      }
+
+      if(user?.status === 'pending') {
+        return res.status(400).send({message: 'Please wait for admin approval.'})
+      }
+      if(user?.status === 'blocked'){
+        return res.status(400).send({message: 'Your account has been blocked by admin.'})
       }
       const token = jwt.sign({ id: user._id, role: user.role }, "IloveYou", {
         expiresIn: "365d",
       });
       res.send({ token, user });
     });
+
+    //get all users for admin---
+    app.get('/users', async(req, res) => {
+        const search = req.query.search;
+        let query = {}
+        if(search) {
+            query = { name: { $regex: search, $options: 'i' } };
+        }
+        const result = await userCollection.find(query).toArray()
+        res.send(result)
+    })
 
     app.get('/user', (req, res) => {
         res.json(req.user);
