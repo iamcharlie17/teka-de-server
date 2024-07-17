@@ -3,7 +3,7 @@ const cors = require("cors");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const port = 3000 || process.env.PORT;
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const app = express();
 
@@ -89,6 +89,23 @@ async function run() {
         }
         const result = await userCollection.find(query).toArray()
         res.send(result)
+    })
+
+    //update user status by admin--
+    app.put('/update-status', async(req, res) => {
+        const data = req.body;
+        const {status, id} = data
+        if(status === 'active'){
+            const result = await userCollection.updateOne({_id: new ObjectId(id)}, {$set:{status: 'active'}})
+            res.send(result)
+        }
+        else if(status === 'block'){
+            const result = await userCollection.updateOne({_id: new ObjectId(id)}, {$set:{status: "blocked"}})
+            res.send(result)
+        }
+        else{
+            res.status(400).send({message: 'Unauthorized'})
+        }
     })
 
     app.get('/user', (req, res) => {
